@@ -9,10 +9,23 @@ defmodule Importio do
 
   def main(args) do
     parsed = args |> parse_args
+    IO.inspect Poison.encode(%{a: 1, b: ["aa", "a", 1]})
+    IO.inspect parsed
     File.rm(@result_filename)
     {:ok, file} = @result_filename |> File.open([:read, :write])
     IO.write(file, "source,target,value\n")
-    get_imports(parsed[:file], parsed[:onlyinner], 0, parsed[:depth], file)
+    root_filename = parsed[:file]
+    root_folder = get_root_folder(root_filename)
+    # Those are constants while we iterating through files
+    options = %ImportOptions{
+      file: file,
+      root_folder: root_folder,
+      folders: parsed[:root_folders],
+      onlyinner: parsed[:onlyinner],
+      treeform: parsed[:tree],
+      max_depth: parsed[:depth]
+    }
+    get_imports(root_filename, 0, options)
     File.close(file)
   end
 
@@ -38,6 +51,7 @@ defmodule Importio do
         root_folders: :string,
         file: :string, 
         onlyinner: :boolean,
+        tree: :boolean,
         depth: :integer
       ],
       aliases: [
@@ -50,39 +64,69 @@ defmodule Importio do
     options |> transform_options
   end
 
-  defp get_imports(filename, only_inner_files, level, depth, results_file) do
-    root_folder = get_root_folder(filename)
+  defp get_imports(filename, level, options) do
+    # Extracting options
+    depth = options.max_depth
+    only_inner_files = options.onlyinner
+    results_file = options.file
+    root_folder = options.root_folder
+    folders = options.folders
+
     if depth > level && searchable?(filename, root_folder, only_inner_files) do
-      filenamefull = filename <> ".flow"
-      path1 = "C:/flowapps/" <> filenamefull
-      path2 = "C:/flow/lib/" <> filenamefull
-      path = unless File.exists?(path1), do: path2, else: path1
       
-      imported_files = reduce_while(
-        File.stream!(path, [], :line),
-        [],
-        fn line, acc ->
-          cond do
-            is_import_line?(line) ->
-              next_filename = line |> get_filename
-              if searchable?(next_filename, root_folder, only_inner_files) do
-                result_line = get_result_line(filename, next_filename)
-                IO.write(results_file, result_line)
-              end
-              {:cont, [next_filename | acc]}
-            empty?(acc) -> {:cont, acc}
-            true -> {:halt, acc}
-          end
-        end
-      )
+      path = 
+        get_file_path(filename, folders)
+
+      imported_files = 
+        get_imported_files(path, filename, root_folder, only_inner_files, results_file)
       
       imported_files
       |> each(
-        fn next ->
-          get_imports(next, only_inner_files, level + 1, depth, results_file)
+        fn next_file ->
+          get_imports(next_file, level + 1, options)
         end
       )
     end
+  end
+
+  defp get_file_path(filename, root_folders) do
+     raw_result = reduce_while(root_folders, {:error, ""},
+        fn root_folder, acc ->
+          path = root_folder <> "/" <> filename <> ".flow"
+          if File.exists?(path) do
+            {:halt, {:ok, path}}
+          else
+            {:cont, acc}
+          end
+        end
+      )
+
+    case raw_result do
+      {:ok, path} -> path
+      {:error, _} -> 
+        IO.puts "Can't find file " <> filename <> " anywhere in folders you mentioned. Please, add more root folders."
+        System.halt(0)
+    end
+  end
+
+  defp get_imported_files(path, filename, root_folder, only_inner_files, results_file) do
+    reduce_while(
+      File.stream!(path, [], :line),
+      [],
+      fn line, acc ->
+        cond do
+          is_import_line?(line) ->
+            next_filename = line |> get_filename
+            if searchable?(next_filename, root_folder, only_inner_files) do
+              result_line = get_result_line(filename, next_filename)
+              IO.write(results_file, result_line)
+            end
+            {:cont, [next_filename | acc]}
+          empty?(acc) -> {:cont, acc}
+          true -> {:halt, acc}
+        end
+      end
+    )
   end
 
   defp get_result_line(filename, next_filename) do
@@ -91,7 +135,7 @@ defmodule Importio do
 
   defp get_filename(line) do
     "import " <> rest = line
-    String.split(rest, ";\n", [trim: true]) |> at(0)
+    String.split(rest, ";", [trim: true]) |> at(0)
   end
 
   defp is_import_line?(line) do
