@@ -10,7 +10,6 @@ defmodule Importio do
 
   def main(args) do
     parsed = args |> parse_args
-    #IO.inspect parsed
     File.rm(@result_filename)
     {:ok, file} = @result_filename |> File.open([:read, :write])
     unless parsed[:tree], do: IO.write(file, "source,target,value\n")
@@ -27,7 +26,8 @@ defmodule Importio do
     }
     {time, struct} = :timer.tc(__MODULE__, :get_imports, [root_filename, 0, options])
     IO.puts "Took #{time/1_000_000}s"
-    {:ok, rez} = Poison.encode(struct)
+    #IO.inspect struct
+    {:ok, rez} = unless parsed[:tree], do: {:ok, struct}, else: Poison.encode(struct)
     IO.write(file, rez)
     File.close(file)
   end
@@ -75,12 +75,26 @@ defmodule Importio do
     root_folder = options.root_folder
     folders = options.folders
     treeform = options.treeform
-
+  
+    path = get_file_path(filename, folders)
+    
+    init = get_init_struct(filename, treeform, root_folder, only_inner_files, options, level);
     if depth > level && searchable?(filename, root_folder, only_inner_files) do
-      
-      path = 
-        get_file_path(filename, folders)
-        get_imported_files(path, filename, root_folder, only_inner_files, treeform, options, level)
+      reduce_while(
+        File.stream!(path, [], :line),
+        init.acc,
+        fn line, acc ->
+          cond do
+            is_import_line?(line) ->
+              next_filename = line |> get_filename
+              {:cont, init.add_result.(acc, next_filename)}
+            is_empty_acc?(acc, treeform) -> {:cont, acc}
+            true -> {:halt, acc}
+          end
+        end
+      )
+    else
+      init.acc
     end
   end
 
@@ -121,11 +135,17 @@ defmodule Importio do
         if treeform do
             %{
               name: acc.name,
-              children: [get_imports(next_filename, level + 1, options) | acc.children]
+              children: [get_imports(next_filename, level + 1, options) | acc.children] |> List.flatten
             }
         else
             result = get_result_line(filename, next_filename)
-            [result | acc]
+            new_array = [result | acc]
+            new = get_imports(next_filename, level + 1, options)
+            if new do
+              Enum.concat(new, new_array)
+            else
+              new_array
+            end
         end
       else
         acc
@@ -133,21 +153,12 @@ defmodule Importio do
     end
   end
 
-  defp get_imported_files(path, filename, root_folder, only_inner_files, treeform, options, level) do
-    init = get_init_struct(filename, treeform, root_folder, only_inner_files, options, level);
-    reduce_while(
-      File.stream!(path, [], :line),
-      init.acc,
-      fn line, acc ->
-        cond do
-          is_import_line?(line) ->
-            next_filename = line |> get_filename
-            {:cont, init.add_result.(acc, next_filename)}
-          empty?(acc.children) -> {:cont, acc}
-          true -> {:halt, acc}
-        end
-      end
-    )
+  defp is_empty_acc?(acc, treeform) do
+    if treeform do
+      empty?(acc.children)
+    else
+      empty?(acc)
+    end
   end
 
   defp get_result_line(filename, next_filename) do
