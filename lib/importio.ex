@@ -1,19 +1,19 @@
 defmodule Importio do
   @moduledoc """
     Using example:
-      escript importio -rf "C:/flowapps, C:/flow" -f smartbuilder/aacc/aacc_ui_test -oi -sl 20
+      escript importio -rf "C:/flowapps, C:/flow" -f smartbuilder/aacc/aacc_ui_test -oi -dp 20
   """
   import Enum
+  import DefMemo
 
   @result_filename __DIR__ <> "/diagram/data/force.csv"
 
   def main(args) do
     parsed = args |> parse_args
-    IO.inspect Poison.encode(%{a: 1, b: ["aa", "a", 1]})
-    IO.inspect parsed
+    #IO.inspect parsed
     File.rm(@result_filename)
     {:ok, file} = @result_filename |> File.open([:read, :write])
-    IO.write(file, "source,target,value\n")
+    unless parsed[:tree], do: IO.write(file, "source,target,value\n")
     root_filename = parsed[:file]
     root_folder = get_root_folder(root_filename)
     # Those are constants while we iterating through files
@@ -25,7 +25,10 @@ defmodule Importio do
       treeform: parsed[:tree],
       max_depth: parsed[:depth]
     }
-    get_imports(root_filename, 0, options)
+    {time, struct} = :timer.tc(__MODULE__, :get_imports, [root_filename, 0, options])
+    IO.puts "Took #{time/1_000_000}s"
+    {:ok, rez} = Poison.encode(struct)
+    IO.write(file, rez)
     File.close(file)
   end
 
@@ -64,28 +67,20 @@ defmodule Importio do
     options |> transform_options
   end
 
-  defp get_imports(filename, level, options) do
+  defmemo get_imports(filename, level, options) do
     # Extracting options
     depth = options.max_depth
     only_inner_files = options.onlyinner
     results_file = options.file
     root_folder = options.root_folder
     folders = options.folders
+    treeform = options.treeform
 
     if depth > level && searchable?(filename, root_folder, only_inner_files) do
       
       path = 
         get_file_path(filename, folders)
-
-      imported_files = 
-        get_imported_files(path, filename, root_folder, only_inner_files, results_file)
-      
-      imported_files
-      |> each(
-        fn next_file ->
-          get_imports(next_file, level + 1, options)
-        end
-      )
+        get_imported_files(path, filename, root_folder, only_inner_files, treeform, options, level)
     end
   end
 
@@ -100,7 +95,6 @@ defmodule Importio do
           end
         end
       )
-
     case raw_result do
       {:ok, path} -> path
       {:error, _} -> 
@@ -109,20 +103,47 @@ defmodule Importio do
     end
   end
 
-  defp get_imported_files(path, filename, root_folder, only_inner_files, results_file) do
+  defp get_init_struct(filename, treeform, root_folder, only_inner_files, options, level) do
+    init_acc = if treeform do
+      %{name: filename, children: []}
+    else
+      []
+    end
+
+    add_new_result = get_new_result_adder(filename, treeform, root_folder, only_inner_files, options, level)
+
+    %{acc: init_acc, add_result: add_new_result}
+  end
+
+  defp get_new_result_adder(filename, treeform, root_folder, only_inner_files, options, level) do
+    fn acc, next_filename ->  
+      if searchable?(next_filename, root_folder, only_inner_files) do
+        if treeform do
+            %{
+              name: acc.name,
+              children: [get_imports(next_filename, level + 1, options) | acc.children]
+            }
+        else
+            result = get_result_line(filename, next_filename)
+            [result | acc]
+        end
+      else
+        acc
+      end
+    end
+  end
+
+  defp get_imported_files(path, filename, root_folder, only_inner_files, treeform, options, level) do
+    init = get_init_struct(filename, treeform, root_folder, only_inner_files, options, level);
     reduce_while(
       File.stream!(path, [], :line),
-      [],
+      init.acc,
       fn line, acc ->
         cond do
           is_import_line?(line) ->
             next_filename = line |> get_filename
-            if searchable?(next_filename, root_folder, only_inner_files) do
-              result_line = get_result_line(filename, next_filename)
-              IO.write(results_file, result_line)
-            end
-            {:cont, [next_filename | acc]}
-          empty?(acc) -> {:cont, acc}
+            {:cont, init.add_result.(acc, next_filename)}
+          empty?(acc.children) -> {:cont, acc}
           true -> {:halt, acc}
         end
       end
@@ -130,7 +151,7 @@ defmodule Importio do
   end
 
   defp get_result_line(filename, next_filename) do
-    [filename, next_filename, "0.2\n"] |> join(",")
+      [filename, next_filename, "0.2\n"] |> join(",")
   end
 
   defp get_filename(line) do

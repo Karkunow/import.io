@@ -15,7 +15,7 @@ defmodule Importio.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger]]
+    [applications: [:logger, :defmemo]]
   end
 
   # Dependencies can be Hex packages:
@@ -28,6 +28,6 @@ defmodule Importio.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    [{:poison, "~> 2.2"}]
+    [{:poison, "~> 2.2"}, {:defmemo, "~> 0.1.0"}]
   end
 end
