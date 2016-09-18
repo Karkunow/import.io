@@ -13,7 +13,9 @@
 }
 
 .node text {
-  font: 14px sans-serif;
+  font-size: 14px;
+  font-family: monospace;
+  font-weight: 700;
 }
 
 .link {
@@ -80,7 +82,7 @@ function update(source) {
       links = tree.links(nodes);
 
   // Normalize for fixed-depth.
-  nodes.forEach(function(d) { d.y = d.depth * 350; });
+  nodes.forEach(function(d) { d.y = d.depth * 400; });
 
   // Update the nodes…
   var node = svg.selectAll("g.node")
@@ -96,10 +98,11 @@ function update(source) {
       .attr("r", 1e-6)
       .style("fill", color_updater);
 
+  var radius = 12.0;
   nodeEnter.append("text")
-      .attr("x", function(d) { return d.children || d._children ? -10 : 10; })
+      .attr("x", -radius)
       .attr("dy", "1.5em")
-      .attr("text-anchor", function(d) { return d.children || d._children ? "end" : "start"; })
+      .attr("text-anchor", "end")
       .text(function(d) { return d.name; })
       .style("fill-opacity", 1e-6);
 
@@ -109,7 +112,7 @@ function update(source) {
       .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
 
   nodeUpdate.select("circle")
-      .attr("r", 12.0)
+      .attr("r", radius)
       .style("fill", color_updater);
 
   nodeUpdate.select("text")
