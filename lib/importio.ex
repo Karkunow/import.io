@@ -6,100 +6,114 @@ defmodule Importio do
   import Enum
   import DefMemo
 
-  @result_filename __DIR__ <> "/diagram/data/force.csv"
-
   def main(args) do
-    parsed = args |> parse_args
-    File.rm(@result_filename)
-    {:ok, file} = @result_filename |> File.open([:read, :write])
-    unless parsed[:tree], do: IO.write(file, "source,target,value\n")
-    root_filename = parsed[:file]
-    root_folder = get_root_folder(root_filename)
-    # Those are constants while we iterating through files
-    options = %ImportOptions{
-      file: file,
-      root_folder: root_folder,
-      folders: parsed[:root_folders],
-      onlyinner: parsed[:onlyinner],
-      treeform: parsed[:tree],
-      max_depth: parsed[:depth]
-    }
-    {time, struct} = :timer.tc(__MODULE__, :get_imports, [root_filename, 0, options])
+    options = args |> parse_args
+    {time, result} = :timer.tc(__MODULE__, :get_imports_structure, [options])
     IO.puts "Took #{time/1_000_000}s"
-    #IO.inspect struct
-    {:ok, rez} = unless parsed[:tree], do: {:ok, struct}, else: Poison.encode(struct)
-    IO.write(file, rez)
-    File.close(file)
+    save_result(result, options.is_tree)
   end
 
-  defp remove_last(words) do
-    slice(words, 0, count(words) - 1)
-  end
+  defp parse_args(args) do
+    transform_options= fn options ->
+      root_folders_raw = options |> Keyword.get(:root_folders)
+      root_folders = root_folders_raw |> String.split(", ")
+      options |> Keyword.put(:root_folders, root_folders)
+    end
 
-  defp get_root_folder(filename) do
-    String.split(filename, "/")
-    |> remove_last
-    |> join("/")
-  end
-
-  defp transform_options(options) do
-    root_folders_raw = options |> Keyword.get(:root_folders)
-    root_folders = root_folders_raw |> String.split(", ")
-    options |> Keyword.put(:root_folders, root_folders)
-  end
-
-  defp parse_args(args) do  
     {options, _, _} = args |> OptionParser.parse(
       switches: [
         root_folders: :string,
         file: :string, 
-        onlyinner: :boolean,
+        inner_search: :boolean,
         tree: :boolean,
         depth: :integer
       ],
       aliases: [
         rf: :root_folders,
         f: :file,
-        oi: :onlyinner,
+        oi: :inner_search,
         dp: :depth
       ]
     )
-    options |> transform_options
+    parsed = options |> transform_options.()
+
+    %ImportOptions{
+      root_file: parsed[:file],
+      folders: parsed[:root_folders],
+      inner_search: parsed[:inner_search],
+      is_tree: parsed[:tree],
+      max_depth: parsed[:depth]
+    }
   end
 
-  defmemo get_imports(filename, level, options) do
+  defp save_result(result, is_tree) do
+    result_filename = __DIR__ <> "/diagram/data/force.csv"
+    File.rm(result_filename)
+    {:ok, file} = result_filename |> File.open([:read, :write])
+    {:ok, rez} = unless is_tree do
+      IO.write(file, "source,target,value\n")
+      {:ok, result}
+    else
+      result |> Poison.encode
+    end
+    IO.write(file, rez)
+    File.close(file)
+  end
+
+  def get_imports_structure(options) do
+    get_imports_structure(options.root_file, 0, options)
+  end
+
+  defmemo get_imports_structure(filename, level, options) do
     # Extracting options
-    depth = options.max_depth
-    only_inner_files = options.onlyinner
-    results_file = options.file
-    root_folder = options.root_folder
+    max_depth = options.max_depth
+    inner_search = options.inner_search
+    root_folder = options.root_file |> get_root_folder
     folders = options.folders
-    treeform = options.treeform
-  
+    is_tree = options.is_tree
+
     path = get_file_path(filename, folders)
-    
-    init = get_init_struct(filename, treeform, root_folder, only_inner_files, options, level);
-    if depth > level && searchable?(filename, root_folder, only_inner_files) do
-      reduce_while(
-        File.stream!(path, [], :line),
-        init.acc,
-        fn line, acc ->
-          cond do
-            is_import_line?(line) ->
-              next_filename = line |> get_filename
-              {:cont, init.add_result.(acc, next_filename)}
-            is_empty_acc?(acc, treeform) -> {:cont, acc}
-            true -> {:halt, acc}
-          end
-        end
-      )
+    init = get_init_struct(filename, level, options);
+
+    if searchable?(filename, level, options) do
+      scan_imports_structure(path, init, is_tree)
     else
       init.acc
     end
   end
 
+  defp scan_imports_structure(path, init, is_tree) do
+    reduce_while(
+      File.stream!(path, [], :line),
+      init.acc,
+      fn line, acc ->
+        # supposes that all imports are written in the one text block
+        # if algo encounters some import and then the line with some other text
+        # then it stops searching through file
+        cond do
+          is_import_line?(line) ->
+            next_filename = line |> get_filename
+            {:cont, init.add_result.(acc, next_filename)}
+          is_empty_acc?(acc, is_tree) -> {:cont, acc}
+          is_empty_string?(line) -> {:cont, acc}
+          true -> {:halt, acc}
+        end
+      end
+    )
+  end
+
+  defp get_root_folder(filename) do
+    remove_last = fn words ->
+      slice(words, 0, count(words) - 1)
+    end
+
+    String.split(filename, "/")
+    |> remove_last.()
+    |> join("/")
+  end
+
   defp get_file_path(filename, root_folders) do
-     raw_result = reduce_while(root_folders, {:error, ""},
+     raw_result = root_folders |> reduce_while({:error, ""},
         fn root_folder, acc ->
           path = root_folder <> "/" <> filename <> ".flow"
           if File.exists?(path) do
@@ -117,30 +131,31 @@ defmodule Importio do
     end
   end
 
-  defp get_init_struct(filename, treeform, root_folder, only_inner_files, options, level) do
-    init_acc = if treeform do
-      %{name: filename, children: []}
-    else
-      []
-    end
+  defp get_init_struct(filename, level, options) do
+    init_acc = 
+      if options.is_tree do
+        %{name: filename, children: []}
+      else
+        []
+      end
 
-    add_new_result = get_new_result_adder(filename, treeform, root_folder, only_inner_files, options, level)
+    add_new_result = get_new_result_adder(filename, level, options)
 
     %{acc: init_acc, add_result: add_new_result}
   end
 
-  defp get_new_result_adder(filename, treeform, root_folder, only_inner_files, options, level) do
+  defp get_new_result_adder(filename, level, options) do
     fn acc, next_filename ->  
-      if searchable?(next_filename, root_folder, only_inner_files) do
-        if treeform do
+      if searchable?(next_filename, level, options) do
+        if options.is_tree do
             %{
               name: acc.name,
-              children: [get_imports(next_filename, level + 1, options) | acc.children] |> List.flatten
+              children: [get_imports_structure(next_filename, level + 1, options) | acc.children] |> List.flatten
             }
         else
             result = get_result_line(filename, next_filename)
             new_array = [result | acc]
-            new = get_imports(next_filename, level + 1, options)
+            new = get_imports_structure(next_filename, level + 1, options)
             if new do
               Enum.concat(new, new_array)
             else
@@ -153,11 +168,11 @@ defmodule Importio do
     end
   end
 
-  defp is_empty_acc?(acc, treeform) do
-    if treeform do
-      empty?(acc.children)
-    else
-      empty?(acc)
+  defp is_empty_acc?(acc, is_tree) do
+    is_graph = !is_tree
+    cond do
+      is_tree  -> empty?(acc.children)
+      is_graph -> empty?(acc)
     end
   end
 
@@ -174,10 +189,23 @@ defmodule Importio do
     line |> String.starts_with?("import")
   end
 
-  defp searchable?(filename, root_folder, only_inner_files) do
-    cond do 
-      !only_inner_files -> true
-      String.length(root_folder) == 0 -> false
+  defp searchable?(filename, current_level, options) do
+    searchable?(
+      filename,
+      options.root_file |> get_root_folder,
+      options.inner_search,
+      options.max_depth,
+      current_level
+    )
+  end
+
+  defp is_empty_string?(string), do: String.trim(string) == ""
+
+  defp searchable?(filename, root_folder, inner_search, max_depth, current_level) do
+    cond do
+      max_depth == current_level -> false
+      !inner_search -> true
+      is_empty_string?(root_folder)-> false
       true -> filename |> String.starts_with?(root_folder)
     end
   end

@@ -1,3 +1,3 @@
 defmodule ImportOptions do
-	defstruct [:file, :root_folder, :folders, :onlyinner, :treeform, :max_depth]
+	defstruct [:root_file, :folders, :inner_search, :is_tree, :max_depth]
 end

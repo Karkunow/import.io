@@ -60,7 +60,7 @@ d3.json("data/force.csv", function(error, flare) {
   root.y0 = 0;
 
   function collapse(d) {
-    if (d != null && d.children) {
+    if (d != null && d.children && d.children.length > 0) {
       d._children = d.children;
       d._children.forEach(collapse);
       d.children = null;
