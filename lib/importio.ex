@@ -5,12 +5,14 @@ defmodule Importio do
   """
   import Enum
   import DefMemo
+  import Benchmark
+  import Tools
 
   def main(args) do
     options = args |> parse_args
-    {time, result} = :timer.tc(__MODULE__, :get_imports_structure, [options])
-    IO.puts "Took #{time/1_000_000}s"
-    save_result(result, options.is_tree)
+    {time1, result1} = benchmark("Calculating imports structure", __MODULE__, :get_imports_structure, [options])
+    {time2, _} = benchmark("Writing to file", __MODULE__, :save_result, [result1, options.is_tree])
+    IO.puts "Total running time: #{time1 + time2}s"
   end
 
   defp parse_args(args) do
@@ -46,7 +48,7 @@ defmodule Importio do
     }
   end
 
-  defp save_result(result, is_tree) do
+  def save_result(result, is_tree) do
     result_filename = __DIR__ <> "/diagram/data/force.csv"
     File.rm(result_filename)
     {:ok, file} = result_filename |> File.open([:read, :write])
@@ -176,9 +178,7 @@ defmodule Importio do
     end
   end
 
-  defp get_result_line(filename, next_filename) do
-      [filename, next_filename, "0.2\n"] |> join(",")
-  end
+  defp get_result_line(filename, next_filename), do: [filename, next_filename, "0.2\n"] |> join(",")
 
   defp get_filename(line) do
     "import " <> rest = line
@@ -198,8 +198,6 @@ defmodule Importio do
       current_level
     )
   end
-
-  defp is_empty_string?(string), do: String.trim(string) == ""
 
   defp searchable?(filename, root_folder, inner_search, max_depth, current_level) do
     cond do
