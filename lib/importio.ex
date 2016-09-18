@@ -1,12 +1,13 @@
 defmodule Importio do
   @moduledoc """
-    Using example:
-      escript importio -rf "C:/flowapps, C:/flow" -f smartbuilder/aacc/aacc_ui_test -oi -dp 20
+    Usage example:
+      escript importio -rf "C:/flowapps, C:/flow/lib" -f smartbuilder/binrunner -dp 5 -oi --tree
   """
   import Enum
   import DefMemo
   import Benchmark
-  import Tools
+  import ImportTools
+  import CommonTools
 
   def main(args) do
     options = args |> parse_args
@@ -84,17 +85,20 @@ defmodule Importio do
     end
   end
 
-  defp scan_imports_structure(path, init, is_tree) do
+  @doc """
+    Scans for imports inside file determined by the path.
+    Supposes that all imports are written in the one text block
+    if algo encounters some import and then the line with some other text
+    then it stops searching through file
+  """
+  def scan_imports_structure(path, init, is_tree) do
     reduce_while(
       File.stream!(path, [], :line),
       init.acc,
       fn line, acc ->
-        # supposes that all imports are written in the one text block
-        # if algo encounters some import and then the line with some other text
-        # then it stops searching through file
         cond do
           is_import_line?(line) ->
-            next_filename = line |> get_filename
+            next_filename = line |> get_dir_filename
             {:cont, init.add_result.(acc, next_filename)}
           is_empty_acc?(acc, is_tree) -> {:cont, acc}
           is_empty_string?(line) -> {:cont, acc}
@@ -102,16 +106,6 @@ defmodule Importio do
         end
       end
     )
-  end
-
-  defp get_root_folder(filename) do
-    remove_last = fn words ->
-      slice(words, 0, count(words) - 1)
-    end
-
-    String.split(filename, "/")
-    |> remove_last.()
-    |> join("/")
   end
 
   defp get_file_path(filename, root_folders) do
@@ -180,31 +174,4 @@ defmodule Importio do
 
   defp get_result_line(filename, next_filename), do: [filename, next_filename, "0.2\n"] |> join(",")
 
-  defp get_filename(line) do
-    "import " <> rest = line
-    String.split(rest, ";", [trim: true]) |> at(0)
-  end
-
-  defp is_import_line?(line) do
-    line |> String.starts_with?("import")
-  end
-
-  defp searchable?(filename, current_level, options) do
-    searchable?(
-      filename,
-      options.root_file |> get_root_folder,
-      options.inner_search,
-      options.max_depth,
-      current_level
-    )
-  end
-
-  defp searchable?(filename, root_folder, inner_search, max_depth, current_level) do
-    cond do
-      max_depth == current_level -> false
-      !inner_search -> true
-      is_empty_string?(root_folder)-> false
-      true -> filename |> String.starts_with?(root_folder)
-    end
-  end
 end

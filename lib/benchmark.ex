@@ -1,6 +1,6 @@
 defmodule Benchmark do
   
-  import Tools
+  import CommonTools
 
   @spec benchmark(module, atom, [any]) :: any
   def benchmark(module, function_name, args) do
