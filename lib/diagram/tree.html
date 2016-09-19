@@ -54,13 +54,69 @@ var svg = d3.select("#mscreen").append("svg")
   .append("g")
     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
+function merge(arrays){
+  return [].concat.apply([], arrays)
+}
+
+function getLevelsArray(tree){
+  result = [];
+  children = getChildren(tree);
+  result.push(children);
+
+  while(children.length > 0) {
+    children_raw = children.map(getChildren);
+    children = merge(children_raw);
+    if(children.length > 0) result.push(children);
+  }
+
+  return result;
+}
+
+function getChildren(tree){
+  if (tree != null && tree.children)
+    return tree.children
+  else
+    return []
+}
+
+function objectToName(obj){
+  return obj.name
+}
+
+function objRepeatsInLowerLevels(levelsArray, level){
+  return function(obj){
+    if(obj.repeated == null){
+      cuttedLevels = levelsArray.slice(level);
+      namesBelow = merge(cuttedLevels).map(objectToName);
+      console.log(namesBelow);
+      obj.repeated = namesBelow.indexOf(obj.name) != -1;
+    }
+  }
+}
+
+function nameIsInArray(objArray, name) {
+  names = objArray.map(objectToName);
+  console.log(names);
+  console.log("FOR" + name);
+  names.indexOf(name) != -1
+}
+
+function calculateRepeatingObj(tree){
+    levelsArray = getLevelsArray(tree);
+    for(var i = 0; i < levelsArray.length - 1; i++) {
+      children = levelsArray[i];
+      children.forEach(objRepeatsInLowerLevels(levelsArray, i + 1))
+    }
+}
+
 d3.json("data/force.csv", function(error, flare) {
   if (error) throw error;
 
   root = flare;
   root.x0 = height / 2;
   root.y0 = 0;
-
+  calculateRepeatingObj(flare);
+  console.log(getLevelsArray(flare));
   function collapse(d) {
     if (d != null && d.children && d.children.length > 0) {
       d._children = d.children;
@@ -182,7 +238,7 @@ function color_updater(d) {
     children_count = 0;
   if(d.children)
     children_count = d.children.length;
-
+  if(d.repeated) return "yellow";
   return children_count  > 15 ? "#ff0000" : default_color;
 };
 
