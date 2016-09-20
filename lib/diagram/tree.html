@@ -24,20 +24,36 @@
   stroke-width: 1.5px;
 }
 
+.svg-container {
+    width: 6000px;
+    display: inline-block;
+    position: relative;
+    padding-bottom: 100%; /* aspect ratio */
+    vertical-align: top;
+    overflow: hidden;
+}
+.svg-content-responsive {
+    display: inline-block;
+    position: absolute;
+    top: 10px;
+    left: 0;
+}
+
 </style>
 <body>
-
-<div id="mscreen" style="width: 1900px; overflow-x: scroll;">
-
+<div id="mscreen" class="svg-container">
 </div>
 
 <script src="https://d3js.org/d3.v3.min.js"></script>
+<script src="http://underscorejs.org/underscore-min.js"></script>
 <script>
 
-var margin = {top: 20, right: 10, bottom: 20, left: 220},
+var margin = {top: 20, right: 10, bottom: 30, left: 220},
     width = 6000;//2860 - margin.right - margin.left,
-    height = 880;//980 - margin.top - margin.bottom;
+    height = window.innerHeight - margin.top - margin.bottom; 
 
+var real_width = width + margin.right + margin.left;
+var real_height = height + margin.top + margin.bottom; 
 var i = 0,
     duration = 750,
     root;
@@ -49,64 +65,77 @@ var diagonal = d3.svg.diagonal()
     .projection(function(d) { return [d.y, d.x]; });
 
 var svg = d3.select("#mscreen").append("svg")
-    .attr("width", width + margin.right + margin.left)
-    .attr("height", height + margin.top + margin.bottom)
-  .append("g")
-    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    //.attr("width", width + margin.right + margin.left)
+    //.attr("height", height + margin.top + margin.bottom)
+   .attr("preserveAspectRatio", "xMinYMin meet")
+   .attr("viewBox", "0 0 "+ real_width + " " + real_height)
+   .classed("svg-content-responsive", true)
+   .append("g")
+   .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
 function merge(arrays){
   return [].concat.apply([], arrays)
 }
 
-function getLevelsArray(tree){
-  result = [];
-  children = getChildren(tree);
+function getAllChildren(tree){
+  var result = [];
+  var children_raw = [];
+  var children = getChildren(tree);
   result.push(children);
-
+  
   while(children.length > 0) {
     children_raw = children.map(getChildren);
     children = merge(children_raw);
     if(children.length > 0) result.push(children);
   }
 
-  return result;
+  return merge(result);
 }
 
-function getChildren(tree){
-  if (tree != null && tree.children)
-    return tree.children
+function getChildren(parent){
+  if (parent != null && parent.children && parent.children.length > 0)
+    return parent.children.map(saveParentInsideChild(parent))
   else
     return []
+}
+
+function saveParentInsideChild(parent){
+  return function(child) {
+    child.parent_for_level = parent;
+    return child;
+  }
 }
 
 function objectToName(obj){
   return obj.name
 }
 
-function objRepeatsInLowerLevels(levelsArray, level){
-  return function(obj){
-    if(obj.repeated == null){
-      cuttedLevels = levelsArray.slice(level);
-      namesBelow = merge(cuttedLevels).map(objectToName);
-      console.log(namesBelow);
-      obj.repeated = namesBelow.indexOf(obj.name) != -1;
+function check(child_for_search, child_to_check){
+    var childrenNames = getAllChildren(child_for_search).map(objectToName);
+    var repeated = childrenNames.indexOf(child_to_check.name) != -1;
+    if(repeated) {
+      if(child_to_check.repeated == null)
+        child_to_check.repeated = [];
+        child_to_check.repeated.push("'" + child_for_search.name + "'");
     }
-  }
 }
 
-function nameIsInArray(objArray, name) {
-  names = objArray.map(objectToName);
-  console.log(names);
-  console.log("FOR" + name);
-  names.indexOf(name) != -1
-}
+function calculateRepeatingIn(node){
+    var children = getChildren(node);
+    var n = children.length;
 
-function calculateRepeatingObj(tree){
-    levelsArray = getLevelsArray(tree);
-    for(var i = 0; i < levelsArray.length - 1; i++) {
-      children = levelsArray[i];
-      children.forEach(objRepeatsInLowerLevels(levelsArray, i + 1))
+    for(var i = 0; i < n; i++) {
+      child1 = children[i];
+      for(var j = 0; j < n; j++){
+        if(i != j){
+          child2 = children[j];
+          //console.log("check for " + child2.name + " in " + child1.name);
+          check(child1, child2);
+        }
+      }
     }
+
+    children.forEach(calculateRepeatingIn);
 }
 
 d3.json("data/force.csv", function(error, flare) {
@@ -115,8 +144,9 @@ d3.json("data/force.csv", function(error, flare) {
   root = flare;
   root.x0 = height / 2;
   root.y0 = 0;
-  calculateRepeatingObj(flare);
-  console.log(getLevelsArray(flare));
+
+  calculateRepeatingIn(flare);
+
   function collapse(d) {
     if (d != null && d.children && d.children.length > 0) {
       d._children = d.children;
@@ -128,8 +158,6 @@ d3.json("data/force.csv", function(error, flare) {
   root.children.forEach(collapse);
   update(root);
 });
-
-//d3.select(self.frameElement).style("height", "400px");
 
 function update(source) {
 
@@ -148,7 +176,9 @@ function update(source) {
   var nodeEnter = node.enter().append("g")
       .attr("class", "node")
       .attr("transform", function(d) { return "translate(" + source.y0 + "," + source.x0 + ")"; })
-      .on("click", click);
+      .on("click", click)
+      .on('mouseover', mouseover())
+      .on('mouseleave', mouseleave());
 
   nodeEnter.append("circle")
       .attr("r", 1e-6)
@@ -230,6 +260,31 @@ function click(d) {
   }
   update(d);
 }
+
+function mouseover() {
+  return function (d) {
+    if(d.repeated){
+      //var dX = this.getAttribute("transform");
+      delete_mouseover(d);
+      d3.select("#mscreen")
+      .append("text")
+      .attr('id', "mouseover")
+      //.attr("transform", "translate(50, 50)")
+      .text("This module is repeated in " + d.repeated.join(","));
+    }
+  }
+}
+
+function mouseleave() {
+  return delete_mouseover;
+}
+
+function delete_mouseover(d) {
+  if(d.repeated){
+    d3.select("#mouseover").remove();
+  }
+}
+
 function color_updater(d) {
   default_color = d._children ? "lightsteelblue" : "#fff";
   if(d._children)
@@ -238,6 +293,8 @@ function color_updater(d) {
     children_count = 0;
   if(d.children)
     children_count = d.children.length;
+  if(d.repeated && children_count  > 15) return "orange";
+  if(d.repeated && children_count  == 0) return "#fbffb5";
   if(d.repeated) return "yellow";
   return children_count  > 15 ? "#ff0000" : default_color;
 };
