@@ -102,6 +102,7 @@ defmodule Importio do
             {:cont, init.add_result.(acc, next_filename)}
           is_empty_acc?(acc, is_tree) -> {:cont, acc}
           is_empty_string?(line) -> {:cont, acc}
+          is_comment_line?(line) -> {:cont, acc}
           true -> {:halt, acc}
         end
       end

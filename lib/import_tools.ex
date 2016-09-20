@@ -8,6 +8,10 @@ defmodule ImportTools do
     line |> String.starts_with?("import")
   end
 
+  def is_comment_line?(line) do
+    line |> String.starts_with?("//")
+  end
+
   @doc """
     Gets filename with with directories from the import line
   """
