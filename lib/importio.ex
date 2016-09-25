@@ -8,11 +8,14 @@ defmodule Importio do
   import Benchmark
   import ImportTools
   import CommonTools
+  import TreeTools
 
   def main(args) do
     options = args |> parse_args
-    {time1, result1} = benchmark("Calculating imports structure", __MODULE__, :get_imports_structure, [options])
-    {time2, _} = benchmark("Writing to file", __MODULE__, :save_result, [result1, options.is_tree])
+    {time1, imports} = benchmark("Calculating imports structure", __MODULE__, :get_imports_structure, [options])
+    #IO.inspect imports |> calculate_repeating
+    Agent.stop(imports |> elem(0))
+    {time2, _} = benchmark("Writing to file", __MODULE__, :save_result, [imports |> elem(1), options.is_tree])
     IO.puts "Total running time: #{time1 + time2}s"
   end
 
@@ -64,10 +67,14 @@ defmodule Importio do
   end
 
   def get_imports_structure(options) do
-    get_imports_structure(options.root_file, 0, options)
+    {:ok, agent} = Agent.start_link fn -> MapSet.new() end
+    {
+      agent,
+      get_imports_structure(options.root_file, 0, options, agent)
+    }
   end
 
-  defmemo get_imports_structure(filename, level, options) do
+  defmemo get_imports_structure(filename, level, options, repeated) do
     # Extracting options
     max_depth = options.max_depth
     inner_search = options.inner_search
@@ -76,7 +83,7 @@ defmodule Importio do
     is_tree = options.is_tree
 
     path = get_file_path(filename, folders)
-    init = get_init_struct(filename, level, options);
+    init = get_init_struct(filename, level, options, repeated)
 
     if searchable?(filename, level, options) do
       scan_imports_structure(path, init, is_tree)
@@ -109,50 +116,38 @@ defmodule Importio do
     )
   end
 
-  defp get_file_path(filename, root_folders) do
-     raw_result = root_folders |> reduce_while({:error, ""},
-        fn root_folder, acc ->
-          path = root_folder <> "/" <> filename <> ".flow"
-          if File.exists?(path) do
-            {:halt, {:ok, path}}
-          else
-            {:cont, acc}
-          end
-        end
-      )
-    case raw_result do
-      {:ok, path} -> path
-      {:error, _} -> 
-        IO.puts "Can't find file " <> filename <> " anywhere in folders you mentioned. Please, add more root folders."
-        System.halt(0)
-    end
-  end
-
-  defp get_init_struct(filename, level, options) do
+  defp get_init_struct(filename, level, options, repeated) do
     init_acc = 
       if options.is_tree do
-        %{name: filename, children: []}
+        %TreeNode{name: filename, children: []}
       else
         []
       end
 
-    add_new_result = get_new_result_adder(filename, level, options)
+    add_new_result = get_new_result_adder(filename, level, options, repeated)
 
     %{acc: init_acc, add_result: add_new_result}
   end
 
-  defp get_new_result_adder(filename, level, options) do
+  defp get_new_result_adder(filename, level, options, repeated) do
+    abc = fn arg -> Agent.get(repeated, fn set -> IO.inspect arg; IO.inspect set; IO.puts "\n"; MapSet.member?(set, arg) end) end
     fn acc, next_filename ->  
       if searchable?(next_filename, level, options) do
         if options.is_tree do
-            %{
+            #if level == 1, do: IO.inspect Agent.get(repeated, fn set -> IO.inspect acc.name; set end)
+            r = %TreeNode{
               name: acc.name,
-              children: [get_imports_structure(next_filename, level + 1, options) | acc.children] |> List.flatten
+              repeated: 
+                (r2 = abc.(next_filename);
+                Agent.update(repeated, fn set -> MapSet.put(set, next_filename) end);
+                r2),
+              children: [get_imports_structure(next_filename, level + 1, options, repeated) | acc.children] |> List.flatten
             }
+            r
         else
             result = get_result_line(filename, next_filename)
             new_array = [result | acc]
-            new = get_imports_structure(next_filename, level + 1, options)
+            new = get_imports_structure(next_filename, level + 1, options, MapSet.new())
             if new do
               Enum.concat(new, new_array)
             else

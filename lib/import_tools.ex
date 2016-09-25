@@ -54,4 +54,23 @@ defmodule ImportTools do
       true -> filename |> String.starts_with?(root_folder)
     end
   end
+
+  def get_file_path(filename, root_folders) do
+    raw_result = root_folders |> reduce_while({:error, ""},
+      fn root_folder, acc ->
+        path = root_folder <> "/" <> filename <> ".flow"
+        if File.exists?(path) do
+          {:halt, {:ok, path}}
+        else
+          {:cont, acc}
+        end
+      end
+    )
+    case raw_result do
+      {:ok, path} -> path
+      {:error, _} -> 
+        IO.puts "Can't find file " <> filename <> " anywhere in folders you mentioned. Please, add more root folders."
+        System.halt(0)
+    end
+  end
 end
