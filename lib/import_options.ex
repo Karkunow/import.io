@@ -3,7 +3,7 @@ defmodule ImportOptions do
 end
 
 defmodule TreeNode do
-  defstruct [:name, :children, :repeated]
+  defstruct [:name, :children, :repeated, :level]
 end
 
 alias Control.Functor
@@ -13,12 +13,13 @@ defimpl Functor, for: TreeNode do
     fun.(
       %TreeNode{
         name: tree.name,
-        children: if tree.children do
+        children: if Enum.count(tree.children) > 0 do
           Enum.map(tree.children, fn child -> Functor.fmap(child, fun) end)
         else
           []
         end,
-        repeated: tree.repeated
+        repeated: tree.repeated,
+        level: tree.level
       }
     )
   end
