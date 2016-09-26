@@ -10,10 +10,25 @@ defmodule Importio do
   import CommonTools
 
   def main(args) do
+
     options = args |> parse_args
-    {time1, result1} = benchmark("Calculating imports structure", __MODULE__, :get_imports_structure, [options])
-    {time2, _} = benchmark("Writing to file", __MODULE__, :save_result, [result1, options.is_tree])
-    IO.puts "Total running time: #{time1 + time2}s"
+    {time1, imports} = benchmark("Calculating imports structure", __MODULE__, :get_imports_structure, [options])
+
+    {time2, imports_with_repeated} = benchmark(
+      "Calculating repeats in the imports tree",
+      ImportRepeat,
+      :fill_in_repeated,
+      [imports, options.max_depth]
+    )
+
+    {time3, _} = benchmark(
+      "Writing to file",
+      __MODULE__,
+      :save_result,
+      [imports_with_repeated, options.is_tree]
+    )
+
+    IO.puts "Total running time: #{time1 + time2 + time3}s"
   end
 
   defp parse_args(args) do
@@ -109,29 +124,10 @@ defmodule Importio do
     )
   end
 
-  defp get_file_path(filename, root_folders) do
-     raw_result = root_folders |> reduce_while({:error, ""},
-        fn root_folder, acc ->
-          path = root_folder <> "/" <> filename <> ".flow"
-          if File.exists?(path) do
-            {:halt, {:ok, path}}
-          else
-            {:cont, acc}
-          end
-        end
-      )
-    case raw_result do
-      {:ok, path} -> path
-      {:error, _} -> 
-        IO.puts "Can't find file " <> filename <> " anywhere in folders you mentioned. Please, add more root folders."
-        System.halt(0)
-    end
-  end
-
   defp get_init_struct(filename, level, options) do
     init_acc = 
       if options.is_tree do
-        %{name: filename, children: []}
+        %TreeNode{name: filename, children: [], level: level}
       else
         []
       end
@@ -145,9 +141,10 @@ defmodule Importio do
     fn acc, next_filename ->  
       if searchable?(next_filename, level, options) do
         if options.is_tree do
-            %{
+            %TreeNode{
               name: acc.name,
-              children: [get_imports_structure(next_filename, level + 1, options) | acc.children] |> List.flatten
+              children: [get_imports_structure(next_filename, level + 1, options) | acc.children] |> List.flatten,
+              level: level
             }
         else
             result = get_result_line(filename, next_filename)
