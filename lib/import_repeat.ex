@@ -9,6 +9,7 @@ defmodule ImportRepeat do
     filter: 2,
     member?: 2
   ]
+
   import CommonTools, only: [is_empty_string?: 1]
   import TreeTools, only: [get_all_children_names: 1]
   alias Control.Functor

@@ -14,12 +14,17 @@ defmodule Importio do
     options = args |> parse_args
     {time1, imports} = benchmark("Calculating imports structure", __MODULE__, :get_imports_structure, [options])
 
-    {time2, imports_with_repeated} = benchmark(
-      "Calculating repeats in the imports tree",
-      ImportRepeat,
-      :fill_in_repeated,
-      [imports, options.max_depth]
-    )
+    {time2, imports_with_repeated} =
+      if options.is_tree do 
+        benchmark(
+          "Calculating repeats in the imports tree",
+          ImportRepeat,
+          :fill_in_repeated,
+          [imports, options.max_depth]
+        )
+      else
+        {0.0, imports}
+      end
 
     {time3, _} = benchmark(
       "Writing to file",
