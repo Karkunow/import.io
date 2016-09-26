@@ -8,18 +8,27 @@ defmodule Importio do
   import Benchmark
   import ImportTools
   import CommonTools
-  import TreeTools
 
   def main(args) do
+
     options = args |> parse_args
     {time1, imports} = benchmark("Calculating imports structure", __MODULE__, :get_imports_structure, [options])
-    {time2, _} = benchmark(
+
+    {time2, imports_with_repeated} = benchmark(
+      "Calculating repeats in the imports tree",
+      ImportRepeat,
+      :fill_in_repeated,
+      [imports, options.max_depth]
+    )
+
+    {time3, _} = benchmark(
       "Writing to file",
       __MODULE__,
       :save_result,
-      [imports |> fill_in_repeated, options.is_tree]
+      [imports_with_repeated, options.is_tree]
     )
-    IO.puts "Total running time: #{time1 + time2}s"
+
+    IO.puts "Total running time: #{time1 + time2 + time3}s"
   end
 
   defp parse_args(args) do
