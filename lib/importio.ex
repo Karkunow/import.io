@@ -19,7 +19,7 @@ defmodule Importio do
           "Calculating repeats in the imports tree",
           ImportRepeat,
           :fill_in_repeated,
-          [imports, options.max_depth]
+          [imports, options.cleaned_level, options.max_depth]
         )
       else
         {0.0, imports}
@@ -55,13 +55,15 @@ defmodule Importio do
         inner_search: :boolean,
         tree: :boolean,
         depth: :integer,
+        cleaned_level: :integer,
         cleanup: :boolean
       ],
       aliases: [
         rf: :root_folders,
         f: :file,
         oi: :inner_search,
-        dp: :depth
+        dp: :depth,
+        cl: :cleaned_level
       ]
     )
     parsed = options |> transform_options.()
@@ -72,7 +74,8 @@ defmodule Importio do
       inner_search: parsed[:inner_search],
       is_tree: parsed[:tree],
       max_depth: parsed[:depth],
-      cleanup: parsed[:cleanup]
+      cleanup: parsed[:cleanup],
+      cleaned_level: parsed[:cleaned_level]
     }
   end
 

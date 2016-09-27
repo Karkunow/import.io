@@ -7,18 +7,22 @@ defmodule ImportRepeat do
     find: 3,
     uniq: 1,
     filter: 2,
-    member?: 2
+    member?: 2,
+    count: 1
   ]
 
   import CommonTools, only: [is_empty_string?: 1]
   import TreeTools, only: [get_all_children_names: 1]
   alias Control.Functor
 
-  def fill_in_repeated(tree, max_level) do
-    level_repeats = calculate_repeats_by_level(tree, max_level)
-    #IO.inspect level_repeats
+  def fill_in_repeated(tree, cleaned_level, max_level) do
+    cleaned_level =
+      if cleaned_level === nil, do: 0, else: cleaned_level
+
+    level_repeats = calculate_repeats_by_level(tree, cleaned_level, max_level)
     tree |> Functor.fmap(
       fn node ->
+        #IO.puts node.level
         %TreeNode{
           name: node.name,
           children: node.children,
@@ -26,46 +30,67 @@ defmodule ImportRepeat do
           line: node.line,
           parent_name: node.parent_name,
           repeated:
-            find(
-              level_repeats |> at(node.level),
-              {"", []},
-              fn item -> item |> elem(0) === {node.name, node.parent_name} end
-            ) |> elem(1)
+            (
+              l = level_repeats |> at(node.level);
+              #IO.inspect l
+              find(
+                l,
+                {"", []},
+                fn item -> item |> elem(0) === {node.name, node.parent_name} end
+              ) |> elem(1)
+            )
         }
       end
     )
   end
 
-  defp calculate_repeats_by_level(tree, max_level) do
+  defp calculate_repeats_by_level(tree, cleaned_level, max_level) do
     # In the end we're adding empty array for root node and the last layer which is not
     # needed to be calculated
-    calculate_repeats_base(tree, 0, max_level, Map.new())
+    calculate_repeats_base(tree, 0, cleaned_level, max_level, Map.new())
     |> Map.values # deleting Map keys, we now need only values array
     |> add_first_and_last
   end
 
-  defp calculate_repeats_base(node, level, max_level, result_as_map) do
+  defp calculate_repeats_base(node, level, cleaned_level, max_level, result_as_map)
+    when level + 1 < cleaned_level do
+      node.children
+      |> reduce(
+        Map.put(result_as_map, level, []),
+        fn child, old_repeats ->
+          new_repeats = calculate_repeats_base(child, level + 1, cleaned_level, max_level, old_repeats)
+          Map.merge(old_repeats, new_repeats,
+          fn _key, v1, v2 ->
+            uniq(v1 ++ v2)
+          end
+        )
+        end
+      )
+  end
+
+  defp calculate_repeats_base(node, level, cleaned_level, max_level, result_as_map) do
     node.children
     |> get_children_complements
     |> convert_complements_to_repeats
-    |> recurse_in_depth(node.children, level, max_level, result_as_map)
+    |> recurse_in_depth(node.children, level, cleaned_level, max_level, result_as_map)
   end
 
   defp add_first_and_last(array) do
     [[]] ++ array ++ [[]]
   end
 
-  defp recurse_in_depth(_, nil, _, _, result_as_map), do: result_as_map
+  defp recurse_in_depth(_, _, level, _, max_level, result_as_map)
+    when level + 1 == max_level,
+    do: result_as_map
 
-  defp recurse_in_depth(_, _, level, max_level, result_as_map)
-    when level + 1 == max_level, do: result_as_map
+  defp recurse_in_depth(_, nil, level, _, _, result_as_map), do: result_as_map
 
-  defp recurse_in_depth(repeat_tuples, children, level, max_level, result_as_map) do
+  defp recurse_in_depth(repeat_tuples, children, level, cleaned_level, max_level, result_as_map) do
     children
     |> reduce(
       Map.update(result_as_map, level, repeat_tuples, fn item -> uniq(item ++ repeat_tuples) end),
       fn child, old_repeats ->
-        new_repeats = calculate_repeats_base(child, level + 1, max_level, old_repeats)
+        new_repeats = calculate_repeats_base(child, level + 1, cleaned_level, max_level, old_repeats)
         Map.merge(old_repeats, new_repeats,
           fn _key, v1, v2 ->
             uniq(v1 ++ v2)
@@ -93,7 +118,7 @@ defmodule ImportRepeat do
               {module.name, module.parent_name},
               module |> find_where_module_repeats(children)
             }
-          module -> {{module.name, module.parent_name}, false}
+          module -> {{module.name, module.parent_name}, []}
         end
       end
     )
