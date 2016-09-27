@@ -30,7 +30,7 @@ defmodule Importio do
       :save_result,
       [imports_with_repeated, options.is_tree]
     )
-    #IO.inspect imports_with_repeated
+
     {time4, _} = benchmark(
       "Removing un-needed imports",
       __MODULE__,

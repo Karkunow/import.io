@@ -22,7 +22,6 @@ defmodule ImportRepeat do
     level_repeats = calculate_repeats_by_level(tree, cleaned_level, max_level)
     tree |> Functor.fmap(
       fn node ->
-        #IO.puts node.level
         %TreeNode{
           name: node.name,
           children: node.children,
@@ -30,15 +29,11 @@ defmodule ImportRepeat do
           line: node.line,
           parent_name: node.parent_name,
           repeated:
-            (
-              l = level_repeats |> at(node.level);
-              #IO.inspect l
-              find(
-                l,
-                {"", []},
-                fn item -> item |> elem(0) === {node.name, node.parent_name} end
-              ) |> elem(1)
-            )
+            find(
+              level_repeats |> at(node.level),
+              {"", []},
+              fn item -> item |> elem(0) === {node.name, node.parent_name} end
+            ) |> elem(1)
         }
       end
     )
