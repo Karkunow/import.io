@@ -1,5 +1,5 @@
 defmodule TreeNode do
-  defstruct [:name, :children, :repeated, :level]
+  defstruct [:name, :children, :repeated, :level, :line, :parent_name]
 end
 
 alias Control.Functor
@@ -15,7 +15,9 @@ defimpl Functor, for: TreeNode do
           []
         end,
         repeated: tree.repeated,
-        level: tree.level
+        level: tree.level,
+        line: tree.line,
+        parent_name: tree.parent_name
       }
     )
   end

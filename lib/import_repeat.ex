@@ -16,17 +16,20 @@ defmodule ImportRepeat do
 
   def fill_in_repeated(tree, max_level) do
     level_repeats = calculate_repeats_by_level(tree, max_level)
+    #IO.inspect level_repeats
     tree |> Functor.fmap(
       fn node ->
         %TreeNode{
           name: node.name,
           children: node.children,
           level: node.level,
+          line: node.line,
+          parent_name: node.parent_name,
           repeated:
             find(
               level_repeats |> at(node.level),
               {"", []},
-              fn item -> item |> elem(0) == node.name end
+              fn item -> item |> elem(0) === {node.name, node.parent_name} end
             ) |> elem(1)
         }
       end
@@ -87,10 +90,10 @@ defmodule ImportRepeat do
         case complement do
           {module, children} ->
             {
-              module.name,
+              {module.name, module.parent_name},
               module |> find_where_module_repeats(children)
             }
-          item -> {item.name, false}
+          module -> {{module.name, module.parent_name}, false}
         end
       end
     )

@@ -13,7 +13,6 @@ defmodule Importio do
 
     options = args |> parse_args
     {time1, imports} = benchmark("Calculating imports structure", __MODULE__, :get_imports_structure, [options])
-
     {time2, imports_with_repeated} =
       if options.is_tree do 
         benchmark(
@@ -25,15 +24,21 @@ defmodule Importio do
       else
         {0.0, imports}
       end
-
     {time3, _} = benchmark(
       "Writing to file",
       __MODULE__,
       :save_result,
       [imports_with_repeated, options.is_tree]
     )
+    #IO.inspect imports_with_repeated
+    {time4, _} = benchmark(
+      "Removing un-needed imports",
+      __MODULE__,
+      :cleanup_repeated_modules,
+      [imports_with_repeated, options.folders, options.cleanup]
+    )
 
-    IO.puts "Total running time: #{time1 + time2 + time3}s"
+    IO.puts "Total running time: #{time1 + time2 + time3 + time4}s"
   end
 
   defp parse_args(args) do
@@ -49,7 +54,8 @@ defmodule Importio do
         file: :string, 
         inner_search: :boolean,
         tree: :boolean,
-        depth: :integer
+        depth: :integer,
+        cleanup: :boolean
       ],
       aliases: [
         rf: :root_folders,
@@ -65,7 +71,8 @@ defmodule Importio do
       folders: parsed[:root_folders],
       inner_search: parsed[:inner_search],
       is_tree: parsed[:tree],
-      max_depth: parsed[:depth]
+      max_depth: parsed[:depth],
+      cleanup: parsed[:cleanup]
     }
   end
 
@@ -84,10 +91,10 @@ defmodule Importio do
   end
 
   def get_imports_structure(options) do
-    get_imports_structure(options.root_file, 0, options)
+    get_imports_structure(options.root_file, 0, 0, "", options)
   end
 
-  defmemo get_imports_structure(filename, level, options) do
+  defmemo get_imports_structure(filename, level, line_number, parent_name, options) do
     # Extracting options
     max_depth = options.max_depth
     inner_search = options.inner_search
@@ -96,12 +103,12 @@ defmodule Importio do
     is_tree = options.is_tree
 
     path = get_file_path(filename, folders)
-    init = get_init_struct(filename, level, options);
+    init = get_init_struct(filename, level, line_number, parent_name, options);
 
     if searchable?(filename, level, options) do
-      scan_imports_structure(path, init, is_tree)
+      scan_imports_structure(path, init, is_tree) |> elem(1)
     else
-      init.acc
+      init.acc |> elem(1)
     end
   end
 
@@ -113,48 +120,59 @@ defmodule Importio do
   """
   def scan_imports_structure(path, init, is_tree) do
     reduce_while(
-      File.stream!(path, [], :line),
+      File.stream!(path),
       init.acc,
-      fn line, acc ->
+      fn line, acum ->
+        {line_number, acc} = acum
         cond do
           is_import_line?(line) ->
             next_filename = line |> get_dir_filename
-            {:cont, init.add_result.(acc, next_filename)}
-          is_empty_acc?(acc, is_tree) -> {:cont, acc}
-          is_empty_string?(line) -> {:cont, acc}
-          is_comment_line?(line) -> {:cont, acc}
-          true -> {:halt, acc}
+            {:cont, {line_number + 1, init.add_result.(acc, line_number, next_filename)}}
+          is_empty_acc?(acc, is_tree) -> {:cont, {line_number + 1, acc}}
+          is_empty_string?(line) -> {:cont, {line_number + 1, acc}}
+          is_comment_line?(line) -> {:cont, {line_number + 1, acc}}
+          true -> {:halt, {line_number + 1, acc}}
         end
       end
     )
   end
 
-  defp get_init_struct(filename, level, options) do
+  defp get_init_struct(filename, level, line_number, parent_name, options) do
     init_acc = 
       if options.is_tree do
-        %TreeNode{name: filename, children: [], level: level}
+        {0,
+          %TreeNode{
+            name: filename,
+            children: [],
+            level: level,
+            line: line_number,
+            parent_name: parent_name
+          }
+        }
       else
         []
       end
 
-    add_new_result = get_new_result_adder(filename, level, options)
+    add_new_result = get_new_result_adder(filename, level, line_number, parent_name, options)
 
     %{acc: init_acc, add_result: add_new_result}
   end
 
-  defp get_new_result_adder(filename, level, options) do
-    fn acc, next_filename ->  
+  defp get_new_result_adder(filename, level, parent_line_number, parent_name, options) do
+    fn acc, new_line_number, next_filename ->  
       if searchable?(next_filename, level, options) do
         if options.is_tree do
             %TreeNode{
               name: acc.name,
-              children: [get_imports_structure(next_filename, level + 1, options) | acc.children] |> List.flatten,
-              level: level
+              children: [get_imports_structure(next_filename, level + 1, new_line_number, filename, options) | acc.children] |> List.flatten,
+              level: level,
+              line: parent_line_number,
+              parent_name: parent_name
             }
         else
             result = get_result_line(filename, next_filename)
             new_array = [result | acc]
-            new = get_imports_structure(next_filename, level + 1, options)
+            new = get_imports_structure(next_filename, level + 1, 0, "", options)
             if new do
               Enum.concat(new, new_array)
             else
@@ -176,5 +194,38 @@ defmodule Importio do
   end
 
   defp get_result_line(filename, next_filename), do: [filename, next_filename, "0.2\n"] |> join(",")
+
+  def cleanup_repeated_modules(tree_with_repetitions, folders, do_cleanup) do
+    if do_cleanup do
+      tree_with_repetitions
+      |> Enum.reduce(Map.new(),
+        fn node, acc ->
+          if count(node.repeated) > 0 do
+            Map.update(acc,
+              node.parent_name,
+              [node.line],
+              &(uniq(&1 ++ [node.line]))
+            )
+          else
+            acc
+          end
+        end
+      )
+      |> Map.to_list
+      |> remove_lines_from_files(folders)
+    end
+  end
+
+  defp remove_lines_from_files(filelist, folders) do
+    filelist
+    |> Enum.each(
+      fn {pname, lines} ->
+          FileTools.remove_lines(
+            get_file_path(pname, folders),
+            lines
+          )
+      end
+    )
+  end
 
 end
