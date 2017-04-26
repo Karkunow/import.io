@@ -24,11 +24,12 @@ defmodule Importio do
       else
         {0.0, imports}
       end
+
     {time3, _} = benchmark(
       "Writing to file",
       __MODULE__,
       :save_result,
-      [imports_with_repeated, options.is_tree]
+      [imports_with_repeated, options.is_tree, options.dot]
     )
 
     {time4, _} = benchmark(
@@ -54,6 +55,7 @@ defmodule Importio do
         file: :string, 
         inner_search: :boolean,
         tree: :boolean,
+        dot: :boolean,
         depth: :integer,
         cleaned_level: :integer,
         cleanup: :boolean
@@ -67,30 +69,43 @@ defmodule Importio do
       ]
     )
     parsed = options |> transform_options.()
-
+    dot_value = if is_nil(parsed[:dot]), do: false, else: parsed[:dot]
+    tree_value = if is_nil(parsed[:tree]), do: false, else: parsed[:tree]
     %ImportOptions{
       root_file: parsed[:file],
       folders: parsed[:root_folders],
       inner_search: parsed[:inner_search],
-      is_tree: parsed[:tree],
+      is_tree: tree_value,
       max_depth: parsed[:depth],
       cleanup: parsed[:cleanup],
-      cleaned_level: parsed[:cleaned_level]
+      cleaned_level: parsed[:cleaned_level],
+      dot: dot_value
     }
   end
 
-  def save_result(result, is_tree) do
+  def save_result(result, is_tree, need_dot_file) do
     result_filename = __DIR__ <> "/diagram/data/force.csv"
     File.rm(result_filename)
     {:ok, file} = result_filename |> File.open([:read, :write])
-    {:ok, rez} = unless is_tree do
-      IO.write(file, "source,target,value\n")
-      {:ok, result}
-    else
-      result |> Poison.encode
-    end
+    {:ok, rez} =
+      cond do
+        not (is_tree or need_dot_file) ->
+          IO.write(file, "source,target,value\n")
+          {:ok, result}
+        need_dot_file ->
+          IO.write(file, "strict digraph {\n")
+          {:ok, result}
+        true ->
+          result |> Poison.encode
+      end
     IO.write(file, rez)
+    if need_dot_file do
+      IO.write(file, "}")
+    end
     File.close(file)
+    if need_dot_file do
+      System.cmd("dot.exe", ["-Tjpg",  __DIR__ <> "/diagram/data/force.csv", "-o" <> __DIR__ <> "/diagram/data/graph.jpg", "-Gdpi=300"])
+    end
   end
 
   def get_imports_structure(options) do
@@ -153,7 +168,7 @@ defmodule Importio do
           }
         }
       else
-        []
+        {0, []}
       end
 
     add_new_result = get_new_result_adder(filename, level, line_number, parent_name, options)
@@ -173,7 +188,7 @@ defmodule Importio do
               parent_name: parent_name
             }
         else
-            result = get_result_line(filename, next_filename)
+            result = get_result_line(filename, next_filename, options.dot, get_root_folder(options.root_file))
             new_array = [result | acc]
             new = get_imports_structure(next_filename, level + 1, 0, "", options)
             if new do
@@ -196,7 +211,24 @@ defmodule Importio do
     end
   end
 
-  defp get_result_line(filename, next_filename), do: [filename, next_filename, "0.2\n"] |> join(",")
+  defp get_result_line(filename, next_filename, need_dot_file, root_folder) do
+    cond do
+      need_dot_file ->
+        pl = String.length(root_folder)
+        sliceIf = fn fname -> 
+          if String.starts_with?(fname, root_folder) do
+            "\"" <> String.slice(fname, pl + 1, String.length(fname) - pl) <> "\""
+          else
+            "\"" <> fname <> "\""
+          end
+        end;
+
+        line = ["\t", sliceIf.(filename), "->", sliceIf.(next_filename)] |> join(" ")
+        line <> ";\n"
+      not need_dot_file ->
+        [filename, next_filename, "0.2\n"] |> join(",")
+    end
+  end
 
   def cleanup_repeated_modules(tree_with_repetitions, folders, do_cleanup) do
     if do_cleanup do
