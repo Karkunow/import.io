@@ -24,8 +24,8 @@
 * --tree :boolean — побудувати дані у вигляді дерева,
 * --dot :boolean — побудувати дані у вигляді графа з ефективним layout'ом,
 * --depth :integer — максимальна глибина проходу по імпортам,
-* --cleaned_level :integer — максимальна глибина очищення імпортів,
-* --cleanup :boolean — увімкнути авто-очищення імпортів,
+* --cleaned_level :integer — максимальна глибина видалення зайвих імпортів,
+* --cleanup :boolean — увімкнути авто-видалення зайвих імпортів,
 
 Відповідні короткі назви (aliases):
 * -rf для --root_folders,
@@ -33,3 +33,12 @@
 * -oi для --inner_search,
 * -dp для --depth,
 * -cl для --cleaned_level;
+
+##Examples
+
+* Очищення зайвих імпортів до глибини 3: escript importio -rf "C:\flowapps, C:\flow\lib" -f smartbuilder/reports/reporter/main -dp 5 --cleanup -cl 3
+* Побудова дерева: escript importio -rf "C:\sports, C:\flow\lib, C:\material" -f sports/spirits -dp 5 --tree
+* Побудова інтерактивного графа: escript importio -rf "C:\flowapps, C:\flow\lib" -f adminpanel/main -dp 6 -oi --graph
+* Побудова графа імпортів з ефективним layout'ом в .jpeg: escript importio -rf "C:\flowapps, C:\flow\lib" -f adminpanel/main -dp 6 --dot
+
+##More info
