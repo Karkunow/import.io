@@ -6,12 +6,12 @@
 Виконайте наступні дії:
 1. Встановлюємо Erlang OTP: http://www.erlang.org/downloads (спробуйте запустити escript, має видати в консоль - escript: Missing filename).
 2. Встановлюємо http://www.graphviz.org/Download.php і перевіряємо чи виконується dot.exe -v (Windows) або dot -v (Linux).
-2. Копіюємо папку import.io в будь яке зручне місце.
-3. Налаштовуємо на неї зручний alias в WAMP сервері.
-4. Запускаємо потрібною командою за допомогою escript importio з даної папки.
-5. Переглядаємо результати на сервері:
+3. Скачуємо [zip архів](https://github.com/Karkunow/import.io/blob/master/import.io.zip) і копіюємо вміст в будь-яке зручне місце.
+4. Налаштовуємо на неї зручний alias в WAMP сервері.
+5. Запускаємо потрібною командою за допомогою escript importio з даної папки.
+6. Переглядаємо результати на сервері:
   http://127.0.0.1/importio/ + tree.html або graph.html.
-6. Або переглядаємо graph.jpeg файл в папці importio\data побудований утилітою dot.
+7. Або переглядаємо graph.jpeg файл в папці import.io\data побудований утилітою dot.
 
 ## Script configurations
 
