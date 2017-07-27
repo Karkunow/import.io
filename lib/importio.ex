@@ -75,7 +75,7 @@ defmodule Importio do
       root_file: parsed[:file],
       folders: parsed[:root_folders],
       inner_search: parsed[:inner_search],
-      is_tree: tree_value,
+      is_tree: tree_value || parsed[:cleanup],
       max_depth: parsed[:depth],
       cleanup: parsed[:cleanup],
       cleaned_level: parsed[:cleaned_level],
