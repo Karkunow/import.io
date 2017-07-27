@@ -59,8 +59,10 @@ defmodule ImportTools do
     raw_result = root_folders |> reduce_while({:error, ""},
       fn root_folder, acc ->
         path = root_folder <> "/" <> filename <> ".flow"
-        if File.exists?(path) do
-          {:halt, {:ok, path}}
+        absolute_path = Path.expand(path)
+
+        if File.exists?(absolute_path) do
+          {:halt, {:ok, absolute_path}}
         else
           {:cont, acc}
         end

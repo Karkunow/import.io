@@ -84,9 +84,14 @@ defmodule Importio do
   end
 
   def save_result(result, is_tree, need_dot_file) do
-    result_filename = __DIR__ <> "/diagram/data/force.csv"
-    File.rm(result_filename)
-    {:ok, file} = result_filename |> File.open([:read, :write])
+    result_filename = Path.expand("data/force.csv")
+    if File.exists?(result_filename) do
+      File.rm!(result_filename)
+    else
+      File.mkdir!("data")
+      File.touch!(result_filename, :calendar.universal_time())
+    end
+    file = result_filename |> File.open!([:read, :write])
     {:ok, rez} =
       cond do
         not (is_tree or need_dot_file) ->
@@ -104,7 +109,12 @@ defmodule Importio do
     end
     File.close(file)
     if need_dot_file do
-      System.cmd("dot.exe", ["-Tjpg",  __DIR__ <> "/diagram/data/force.csv", "-o" <> __DIR__ <> "/diagram/data/graph.jpg", "-Gdpi=300"])
+      executable_extension =
+        case :os.type do
+          {:unix, _} -> ""
+          _ -> ".exe"
+        end
+      System.cmd("dot" <> executable_extension, ["-Tjpg",  "data/force.csv", "-o" <> "data/graph.jpg", "-Gdpi=144"])
     end
   end
 
