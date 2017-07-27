@@ -1,0 +1,50 @@
+
+<!DOCTYPE html>
+<meta charset="utf-8">
+<script src="https://d3js.org/d3.v3.min.js"></script>
+<script type="text/javascript" src="js/draw_graph.js"></script>
+
+<style>
+
+path.link {
+  fill: none;
+  stroke: #666;
+  stroke-width: 1.5px;
+  length: 20;
+}
+
+path.link.twofive {
+  opacity: 0.25;
+}
+
+path.link.fivezero {
+  opacity: 0.50;
+}
+
+path.link.sevenfive {
+  opacity: 0.75;
+}
+
+path.link.onezerozero {
+  opacity: 1.0;
+}
+
+circle {
+  fill: #ccc;
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+text {
+  fill: #000;
+  font: 8px sans-serif;
+  pointer-events: none;
+}
+
+</style>
+<body>
+  <script>
+   d3.csv("data/force.csv", draw_graph)
+  </script>
+</body>
+</html>
