@@ -34,11 +34,11 @@
 * -dp для --depth,
 * -cl для --cleaned_level;
 
-##Examples
+## Examples
 
-* Очищення зайвих імпортів до глибини 3: escript importio -rf "C:\flowapps, C:\flow\lib" -f smartbuilder/reports/reporter/main -dp 5 --cleanup -cl 3
-* Побудова дерева: escript importio -rf "C:\sports, C:\flow\lib, C:\material" -f sports/spirits -dp 5 --tree
-* Побудова інтерактивного графа: escript importio -rf "C:\flowapps, C:\flow\lib" -f adminpanel/main -dp 6 -oi --graph
-* Побудова графа імпортів з ефективним layout'ом в .jpeg: escript importio -rf "C:\flowapps, C:\flow\lib" -f adminpanel/main -dp 6 --dot
+* Очищення зайвих імпортів до глибини 3: <br>`escript importio -rf "C:\flowapps, C:\flow\lib" -f smartbuilder/reports/reporter/main -dp 5 --cleanup -cl 3`
+* Побудова дерева: <br>`escript importio -rf "C:\sports, C:\flow\lib, C:\material" -f sports/spirits -dp 5 --tree`
+* Побудова інтерактивного графа: <br>`escript importio -rf "C:\flowapps, C:\flow\lib" -f adminpanel/main -dp 6 -oi --graph`
+* Побудова графа імпортів з ефективним layout'ом в .jpeg: <br>`escript importio -rf "C:\flowapps, C:\flow\lib" -f adminpanel/main -dp 6 --dot`
 
-##More info
+## More info
