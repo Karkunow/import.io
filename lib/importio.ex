@@ -69,15 +69,19 @@ defmodule Importio do
       ]
     )
     parsed = options |> transform_options.()
-    dot_value = if is_nil(parsed[:dot]), do: false, else: parsed[:dot]
-    tree_value = if is_nil(parsed[:tree]), do: false, else: parsed[:tree]
+    filter_nil = fn x -> if is_nil(x), do: false, else: x end
+    dot_value = filter_nil.(parsed[:dot])
+    cleanup_value = filter_nil.(parsed[:cleanup])
+    tree_value = filter_nil.(parsed[:tree]) || cleanup_value
+    inner_search_value = filter_nil.(parsed[:inner_search])
+
     %ImportOptions{
       root_file: parsed[:file],
       folders: parsed[:root_folders],
-      inner_search: parsed[:inner_search],
-      is_tree: tree_value || parsed[:cleanup],
+      inner_search: inner_search_value,
+      is_tree: tree_value,
       max_depth: parsed[:depth],
-      cleanup: parsed[:cleanup],
+      cleanup: cleanup_value,
       cleaned_level: parsed[:cleaned_level],
       dot: dot_value
     }
