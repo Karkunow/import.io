@@ -128,13 +128,14 @@ defmodule Importio do
 
   defmemo get_imports_structure(filename, level, line_number, parent_name, options) do
     # Extracting options
-    max_depth = options.max_depth
-    inner_search = options.inner_search
-    root_folder = options.root_file |> get_root_folder
+    #max_depth = options.max_depth
+    #inner_search = options.inner_search
+    root_folder = get_root_folder(options.root_file, options.folders)
     folders = options.folders
     is_tree = options.is_tree
 
     path = get_file_path(filename, folders)
+    #IO.puts path
     init = get_init_struct(filename, level, line_number, parent_name, options);
 
     if searchable?(filename, level, options) do
@@ -151,6 +152,7 @@ defmodule Importio do
     then it stops searching through file
   """
   def scan_imports_structure(path, init, is_tree) do
+    #IO.puts "Start scan in " <> path
     reduce_while(
       File.stream!(path),
       init.acc,
@@ -202,7 +204,7 @@ defmodule Importio do
               parent_name: parent_name
             }
         else
-            result = get_result_line(filename, next_filename, options.dot, get_root_folder(options.root_file))
+            result = get_result_line(filename, next_filename, options.dot, get_root_folder(options.root_file, options.folders))
             new_array = [result | acc]
             new = get_imports_structure(next_filename, level + 1, 0, "", options)
             if new do

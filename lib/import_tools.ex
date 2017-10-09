@@ -23,35 +23,48 @@ defmodule ImportTools do
   @doc """
     Gets root folder from filename with directories
   """
-  def get_root_folder(dir_filename) do
+  def get_root_folder(dir_filename, root_folders) do
     remove_last = fn words ->
       slice(words, 0, count(words) - 1)
     end
 
-    String.split(dir_filename, "/")
+    res = String.split(dir_filename, "/")
     |> remove_last.()
     |> join("/")
+
+    #IO.puts res <> " for " <> dir_filename
+
+    if is_empty_string?(res) do
+      new_filename = get_file_path(dir_filename, root_folders)
+      get_root_folder(new_filename, root_folders)
+    else 
+      res
+    end
   end
 
   @doc """
     Checks if file with 'filename' is searchable: which means we can scan imports from it
   """
   def searchable?(filename, current_level, options) do
+    #IO.puts "Searchable? " <> filename
     searchable?(
       filename,
-      options.root_file |> get_root_folder,
+      get_root_folder(options.root_file, options.folders),
       options.inner_search,
       options.max_depth,
-      current_level
+      current_level,
+      options.folders
     )
   end
 
-  defp searchable?(filename, root_folder, inner_search, max_depth, current_level) do
+  defp searchable?(filename, root_folder, inner_search, max_depth, current_level, root_folders) do
     cond do
       max_depth == current_level -> false
       !inner_search -> true
-      is_empty_string?(root_folder)-> false
-      true -> filename |> String.starts_with?(root_folder)
+      is_empty_string?(root_folder) -> false
+      true ->
+        #IO.puts filename <> " " <> root_folder
+        filename |> String.starts_with?(root_folder) || root_folder <> "/"<> filename <> ".flow" == get_file_path(filename, root_folders)
     end
   end
 
