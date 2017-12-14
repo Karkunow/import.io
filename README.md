@@ -17,9 +17,9 @@
 
 Якщо коротко, то опції в нас наступні:
 Повні назви:
-* --root_folders :string — список кореневих папок через кому, наприклад - "C:\sports, C:\flow\lib, C:\material"
-* --file :string —  назва файлу для аналізу - smartbuilder/reports/reporter/main, 
-* --inner_search :boolean — проводити аналіз імпортів тільки в папці кореневого файлу, для 	прикладу згори це — smartbuilder/reports/reporter/. Корисна опція для початку аналіза та оптимізації свого проекта.
+* --root_folders :string — список кореневих папок через кому, наприклад - "C:\root_folder1, C:\folder\root_folder2"
+* --file :string —  назва файлу для аналізу - myproject/reports/main, 
+* --inner_search :boolean — проводити аналіз імпортів тільки в папці кореневого файлу, для 	прикладу згори це — myproject/reports/. Корисна опція для початку аналіза та оптимізації свого проекта.
 * --graph :boolean — побудувати дані у вигляді графа,
 * --tree :boolean — побудувати дані у вигляді дерева,
 * --dot :boolean — побудувати дані у вигляді графа з ефективним layout'ом,
@@ -36,8 +36,8 @@
 
 ## Examples
 
-* Очищення зайвих імпортів до глибини 3: <br>`escript importio -rf "C:\flowapps, C:\flow\lib" -f smartbuilder/reports/reporter/main -dp 5 --cleanup -cl 3`
-* Побудова дерева: <br>`escript importio -rf "C:\sports, C:\flow\lib, C:\material" -f sports/spirits -dp 5 --tree`
+* Очищення зайвих імпортів до глибини 3: <br>`escript importio -rf "C:\flowapps, C:\flow\lib" -f myproject/reports/main -dp 5 --cleanup -cl 3`
+* Побудова дерева: <br>`escript importio -rf "C:\sports, C:\flow\lib, C:\material" -f myproject/reports/main -dp 5 --tree`
 * Побудова інтерактивного графа: <br>`escript importio -rf "C:\flowapps, C:\flow\lib" -f adminpanel/main -dp 6 -oi --graph`
 * Побудова графа імпортів з ефективним layout'ом в .jpeg: <br>`escript importio -rf "C:\flowapps, C:\flow\lib" -f adminpanel/main -dp 6 --dot`
 
